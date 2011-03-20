@@ -8,6 +8,8 @@ import wx
 from wx.lib.pubsub import Publisher as pub
 
 class JukeJointModel(object):
+  music_file_extensions = ['.mp3', '.flac', '.m4a', '.ogg']
+  
   def __init__(self, display_num, music_path, config_path, player_path):
     self._display_num = display_num
     self._music_path = music_path
@@ -24,7 +26,6 @@ class JukeJointModel(object):
     self._left_idx = 0
     self._right_idx = 0
     self._filter = ''
-    self._music_file_extensions = ['.mp3', '.flac', '.m4a', '.ogg']
 
   def get_display_folder(self, num):
     return self._display_folders[num]
@@ -88,7 +89,7 @@ class JukeJointModel(object):
 
   def _includes_music(self, files):
     for file in files:
-      for extension in self._music_file_extensions:
+      for extension in self.music_file_extensions:
         if file.endswith(extension):
           return True
     return False
