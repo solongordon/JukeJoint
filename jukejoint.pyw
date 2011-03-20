@@ -24,6 +24,7 @@ class JukeJointModel(object):
     self._left_idx = 0
     self._right_idx = 0
     self._filter = ''
+    self._music_file_extensions = ['.mp3', '.flac', '.m4a', '.ogg']
 
   def get_display_folder(self, num):
     return self._display_folders[num]
@@ -35,7 +36,7 @@ class JukeJointModel(object):
     if self._filter != keyword:
       self._filter = keyword
       self._refresh_folders()
-
+  
   def next_folders(self):
     self._display_folders = []
     benchmark_updated = False
@@ -43,7 +44,7 @@ class JukeJointModel(object):
       self._right_idx += 1
       self._right_idx %= len(self._folders)
       folder = self._folders[self._right_idx]
-      if self._is_valid_folder(folder):
+      if self._is_displayable(folder):
         self._display_folders.append(folder)
         if not benchmark_updated:
           self._left_idx = self._right_idx
@@ -57,7 +58,7 @@ class JukeJointModel(object):
       self._left_idx -= 1
       self._left_idx %= len(self._folders)
       folder = self._folders[self._left_idx]
-      if self._is_valid_folder(folder):
+      if self._is_displayable(folder):
         self._display_folders.insert(0, folder)
         if not benchmark_updated:
           self._right_idx = self._left_idx
@@ -68,7 +69,7 @@ class JukeJointModel(object):
     data = {self._music_path: self._get_folders()}
     out_file = open(self._config_path, 'wb')
     pickle.dump(data, out_file)
-  
+
   def _refresh_folders(self):
     self._display_folders = []
     self._right_idx = self._left_idx - 1
@@ -76,17 +77,29 @@ class JukeJointModel(object):
       self._right_idx += 1
       self._right_idx %= len(self._folders)
       folder = self._folders[self._right_idx]
-      if self._is_valid_folder(folder):
+      if self._is_displayable(folder):
         self._display_folders.append(folder)
     pub.sendMessage("FOLDERS CHANGED", self._display_folders)
+  
+  def _is_displayable(self, folder):
+    return self._filter in folder and \
+           self._has_folder_image(folder) and \
+           self._includes_music(os.listdir(folder))
 
-  def _is_valid_folder(self, folder):
+  def _includes_music(self, files):
+    for file in files:
+      for extension in self._music_file_extensions:
+        if file.endswith(extension):
+          return True
+    return False
+
+  def _has_folder_image(self, folder):
     cover_path = os.path.join(folder, 'folder.jpg')
-    return self._filter in folder and os.path.exists(cover_path)
+    return os.path.exists(cover_path)
 
   def _get_folders(self):
     return [path for path, dirs, files in os.walk(self._music_path)
-            if 'folder.jpg' in files]
+            if 'folder.jpg' in files and self._includes_music(files)]
 
 class JukeJointView(wx.Frame):
   def __init__(self, parent, img_size, span):
