@@ -36,7 +36,7 @@ class JukeJointModel(object):
     if self._filter != keyword:
       self._filter = keyword
       self._refresh_folders()
-  
+
   def next_folders(self):
     self._display_folders = []
     benchmark_updated = False
@@ -50,7 +50,7 @@ class JukeJointModel(object):
           self._left_idx = self._right_idx
           benchmark_updated = True
     pub.sendMessage("FOLDERS CHANGED", self._display_folders)
-      
+
   def previous_folders(self):
     self._display_folders = []
     benchmark_updated = False
@@ -80,11 +80,11 @@ class JukeJointModel(object):
       if self._is_displayable(folder):
         self._display_folders.append(folder)
     pub.sendMessage("FOLDERS CHANGED", self._display_folders)
-  
+
   def _is_displayable(self, folder):
-    return self._filter in folder and \
-           self._has_folder_image(folder) and \
-           self._includes_music(os.listdir(folder))
+    return (self._filter in folder and
+            self._has_folder_image(folder) and
+            self._includes_music(os.listdir(folder)))
 
   def _includes_music(self, files):
     for file in files:
@@ -123,17 +123,17 @@ class CoversPanel(wx.Panel):
   def __init__(self, parent, img_size, span):
     wx.Panel.__init__(self, parent, -1, style=wx.WANTS_CHARS)
     self.covers = [Cover(self, img_size) for i in range(span * span)]
-    
+
     self.sizer = wx.GridSizer(span, span, 0, 0)
     self.sizer.AddMany(self.covers)
     self.SetSizer(self.sizer)
     self.Fit()
-  
+
 class Cover(wx.StaticBitmap):
   def __init__(self, parent, img_size):
     self.img_size = img_size
     wx.StaticBitmap.__init__(self, parent, -1, size=(img_size, img_size))
-  
+
   def set_image(self, image_path):
     image = wx.Image(image_path)
     image.Rescale(self.img_size, self.img_size, wx.IMAGE_QUALITY_HIGH)
@@ -162,7 +162,7 @@ class JukeJointController(object):
     for cover, folder in zip(self.view.panel.covers, folders):
       image_path = os.path.join(folder, 'folder.jpg')
       cover.set_image(image_path)
-  
+
   def __on_key_down(self, event):
     keycode = event.GetKeyCode()
     if keycode == wx.WXK_ESCAPE:
@@ -177,7 +177,7 @@ class JukeJointController(object):
       self.model.change_filter('01 classical')
     elif keycode == ord('P'):
       self.model.change_filter('02 popular')
-  
+
   def __on_left_click(self, event):
     cover_num = self.view.panel.covers.index(event.GetEventObject())
     folder = self.model.get_display_folder(cover_num)
