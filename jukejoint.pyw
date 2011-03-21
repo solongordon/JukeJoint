@@ -27,6 +27,9 @@ class JukeJointModel(object):
     self._right_idx = 0
     self._filter = ''
 
+    self.search_mode_enabled = False
+    self.user_filter = ''
+
   def get_display_folder(self, num):
     return self._display_folders[num]
 
@@ -166,18 +169,31 @@ class JukeJointController(object):
 
   def __on_key_down(self, event):
     keycode = event.GetKeyCode()
-    if keycode == wx.WXK_ESCAPE:
-      self.view.Destroy()
-    elif keycode in (wx.WXK_SPACE, wx.WXK_DOWN, wx.WXK_RIGHT):
-      self.model.next_folders()
-    elif keycode in (wx.WXK_UP, wx.WXK_LEFT):
-      self.model.previous_folders()
-    elif keycode == ord('A'):
-      self.model.change_filter('')
-    elif keycode == ord('C'):
-      self.model.change_filter('01 classical')
-    elif keycode == ord('P'):
-      self.model.change_filter('02 popular')
+    if self.model.search_mode_enabled:
+      if ord(' ') <= keycode <= ord('~'):
+        self.model.user_filter += chr(keycode).lower()
+      elif keycode == wx.WXK_RETURN:
+        self.model.change_filter(self.model.user_filter)
+        self.model.user_filter = ''
+        self.model.search_mode_enabled = False
+      elif keycode == wx.WXK_ESCAPE:
+        self.model.user_filter = ''
+        self.model.search_mode_enabled = False
+    else:
+      if keycode == wx.WXK_ESCAPE:
+        self.view.Destroy()
+      elif keycode == wx.WXK_F3:
+        self.model.search_mode_enabled = True
+      elif keycode in (wx.WXK_SPACE, wx.WXK_DOWN, wx.WXK_RIGHT):
+        self.model.next_folders()
+      elif keycode in (wx.WXK_UP, wx.WXK_LEFT):
+        self.model.previous_folders()
+      elif keycode == ord('A'):
+        self.model.change_filter('')
+      elif keycode == ord('C'):
+        self.model.change_filter('01 classical')
+      elif keycode == ord('P'):
+        self.model.change_filter('02 popular')
 
   def __on_left_click(self, event):
     cover_num = self.view.panel.covers.index(event.GetEventObject())
