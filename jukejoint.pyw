@@ -1,114 +1,98 @@
 import os
 import random
 import subprocess
-import pickle
-import thread
 
 import wx
 from wx.lib.pubsub import Publisher as pub
 
 class JukeJointModel(object):
   music_file_extensions = ['.mp3', '.flac', '.m4a', '.ogg']
+  cover_filename = 'folder.jpg'
   
-  def __init__(self, display_num, music_path, config_path, player_path):
+  def __init__(self, display_num, music_path, player_path):
     self._display_num = display_num
     self._music_path = music_path
-    self._config_path = config_path
     self._player_path = player_path
-
-    try:
-      self._folders = pickle.load(open(config_path))[music_path]
-    except:
-      self._folders = self._get_folders()
-    random.shuffle(self._folders)
-
     self._display_folders = []
-    self._left_idx = 0
-    self._right_idx = 0
-    self._filter = ''
-
+    self._filter = '02 popular'
+    self._benchmark = 0
     self.search_mode_enabled = False
     self.user_filter = ''
 
-  def get_display_folder(self, num):
-    return self._display_folders[num]
+    self._folders = self._get_music_folders()
+    random.shuffle(self._folders)
 
-  def play(self, folder):
+  def play(self, display_idx):
+    folder_idx = self._display_folders[display_idx]
+    folder = self._get_folder(folder_idx)
     subprocess.Popen([self._player_path, folder])
 
   def change_filter(self, keyword):
     if self._filter != keyword:
       self._filter = keyword
-      self._refresh_folders()
+      self.refresh_folders()
+
+  def refresh_folders(self):
+    start_idx = self._benchmark
+    self._display_folders = self._get_new_folders(self._display_num,
+                                                  start_idx)
+    self._send_new_image_paths()
 
   def next_folders(self):
-    self._display_folders = []
-    benchmark_updated = False
-    while len(self._display_folders) < self._display_num:
-      self._right_idx += 1
-      self._right_idx %= len(self._folders)
-      folder = self._folders[self._right_idx]
-      if self._is_displayable(folder):
-        self._display_folders.append(folder)
-        if not benchmark_updated:
-          self._left_idx = self._right_idx
-          benchmark_updated = True
-    pub.sendMessage("FOLDERS CHANGED", self._display_folders)
+    start_idx = self._display_folders[-1] + 1
+    self._display_folders = self._get_new_folders(self._display_num, 
+                                                  start_idx)
+    self._benchmark = self._display_folders[0]
+    self._send_new_image_paths()
 
   def previous_folders(self):
-    self._display_folders = []
-    benchmark_updated = False
-    while len(self._display_folders) < self._display_num:
-      self._left_idx -= 1
-      self._left_idx %= len(self._folders)
-      folder = self._folders[self._left_idx]
-      if self._is_displayable(folder):
-        self._display_folders.insert(0, folder)
-        if not benchmark_updated:
-          self._right_idx = self._left_idx
-          benchmark_updated = True
-    pub.sendMessage("FOLDERS CHANGED", self._display_folders)
+    start_idx = self._display_folders[0] - 1
+    self._display_folders = self._get_new_folders(self._display_num,
+                                                  start_idx,
+                                                  step=-1)
+    self._benchmark = self._display_folders[0]
+    self._send_new_image_paths()
 
-  def dump_folder_data(self):
-    data = {self._music_path: self._get_folders()}
-    out_file = open(self._config_path, 'wb')
-    pickle.dump(data, out_file)
+  def _get_music_folders(self):
+    return [path for path, dirs, files in os.walk(self._music_path)]
 
-  def _refresh_folders(self):
-    self._display_folders = []
-    self._right_idx = self._left_idx - 1
-    while len(self._display_folders) < self._display_num:
-      self._right_idx += 1
-      self._right_idx %= len(self._folders)
-      folder = self._folders[self._right_idx]
-      if self._is_displayable(folder):
-        self._display_folders.append(folder)
-    pub.sendMessage("FOLDERS CHANGED", self._display_folders)
+  def _get_folder(self, idx):
+    return self._folders[idx % len(self._folders)]
+
+  def _get_new_folders(self, num, start_idx, step=1):
+    folders = []
+    idx = start_idx
+    while len(folders) < num:
+      if self._is_displayable(self._get_folder(idx)):
+        folders.append(idx)
+      idx += step
+    return sorted(folders)
 
   def _is_displayable(self, folder):
     return (self._filter in folder and
             self._has_folder_image(folder) and
-            self._includes_music(os.listdir(folder)))
+            self._includes_music(folder))
 
-  def _includes_music(self, files):
-    for file in files:
+  def _has_folder_image(self, folder):
+    cover_path = os.path.join(folder, self.cover_filename)
+    return os.path.exists(cover_path)
+
+  def _includes_music(self, folder):
+    for file in os.listdir(folder):
       for extension in self.music_file_extensions:
         if file.endswith(extension):
           return True
     return False
 
-  def _has_folder_image(self, folder):
-    cover_path = os.path.join(folder, 'folder.jpg')
-    return os.path.exists(cover_path)
-
-  def _get_folders(self):
-    return [path for path, dirs, files in os.walk(self._music_path)
-            if 'folder.jpg' in files and self._includes_music(files)]
+  def _send_new_image_paths(self):
+    image_paths = [os.path.join(self._get_folder(idx), self.cover_filename)
+                   for idx in self._display_folders]
+    pub.sendMessage("FOLDERS CHANGED", image_paths)
 
 class JukeJointView(wx.Frame):
-  def __init__(self, parent, img_size, span):
+  def __init__(self, img_size, span):
     style = wx.STAY_ON_TOP | wx.FRAME_NO_TASKBAR | wx.NO_BORDER
-    wx.Frame.__init__(self, parent, -1, 'JukeJoint',
+    wx.Frame.__init__(self, None, -1, 'JukeJoint',
                       size=(img_size*span, img_size*span), style=style)
     self.center_on_primary_monitor()
     self.panel = CoversPanel(self, img_size, span)
@@ -138,36 +122,32 @@ class Cover(wx.StaticBitmap):
     self.img_size = img_size
     wx.StaticBitmap.__init__(self, parent, -1, size=(img_size, img_size))
 
-  def set_image(self, image_path):
-    image = wx.Image(image_path)
-    image.Rescale(self.img_size, self.img_size, wx.IMAGE_QUALITY_HIGH)
-    self.SetBitmap(wx.BitmapFromImage(image))
-
 class JukeJointController(object):
-  def __init__(self, music_path, config_path, player_path, img_size, span):
-    self.model = JukeJointModel(span * span, music_path, config_path,
-                                   player_path)
-    self.view = JukeJointView(None, img_size, span)
-    pub.subscribe(self.folders_changed, "FOLDERS CHANGED")
+  def __init__(self, music_path, player_path, img_size, span):
+    self.model = JukeJointModel(span * span, music_path, player_path)
+    self.view = JukeJointView(img_size, span)
+    self.img_size = img_size
+    pub.subscribe(self._on_folders_changed, "FOLDERS CHANGED")
 
-    self.view.panel.Bind(wx.EVT_KEY_DOWN, self.__on_key_down)
+    self.view.panel.Bind(wx.EVT_KEY_DOWN, self._on_key_down)
     for cover in self.view.panel.covers:
-      cover.Bind(wx.EVT_LEFT_UP, self.__on_left_click)
-      cover.Bind(wx.EVT_RIGHT_UP, self.__on_right_click)
+      cover.Bind(wx.EVT_LEFT_UP, self._on_left_click)
+      cover.Bind(wx.EVT_RIGHT_UP, self._on_right_click)
 
-    self.model.next_folders()
+    self.model.refresh_folders()
     self.view.Show()
-
-    thread.start_new_thread(self.model.dump_folder_data, ())
     self.view.panel.SetFocus()
 
-  def folders_changed(self, message):
-    folders = message.data
-    for cover, folder in zip(self.view.panel.covers, folders):
-      image_path = os.path.join(folder, 'folder.jpg')
-      cover.set_image(image_path)
+  def _on_folders_changed(self, message):
+    images = []
+    for image_path in message.data:
+      image = wx.Image(image_path)
+      image.Rescale(self.img_size, self.img_size, wx.IMAGE_QUALITY_HIGH)
+      images.append(wx.BitmapFromImage(image))
+    for cover, image in zip(self.view.panel.covers, images):
+      cover.SetBitmap(image)
 
-  def __on_key_down(self, event):
+  def _on_key_down(self, event):
     keycode = event.GetKeyCode()
     if self.model.search_mode_enabled:
       if ord(' ') <= keycode <= ord('~'):
@@ -195,13 +175,12 @@ class JukeJointController(object):
       elif keycode == ord('P'):
         self.model.change_filter('02 popular')
 
-  def __on_left_click(self, event):
-    cover_num = self.view.panel.covers.index(event.GetEventObject())
-    folder = self.model.get_display_folder(cover_num)
-    self.model.play(folder)
+  def _on_left_click(self, event):
+    cover_idx = self.view.panel.covers.index(event.GetEventObject())
+    self.model.play(cover_idx)
     self.view.Destroy()
 
-  def __on_right_click(self, event):
+  def _on_right_click(self, event):
     self.model.next_folders()
 
 if __name__ == '__main__':
@@ -209,7 +188,6 @@ if __name__ == '__main__':
   config = SafeConfigParser()
   config.read('jukejoint.ini')
   args = [config.get(os.name, 'music_path'),
-          os.path.expanduser(config.get(os.name, 'config_path')),
           config.get(os.name, 'player_path'),
           config.getint(os.name, 'img_size'),
           config.getint(os.name, 'span')]
