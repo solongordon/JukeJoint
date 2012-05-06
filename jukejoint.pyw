@@ -1,7 +1,8 @@
+import cPickle
 import os
 import random
 import subprocess
-
+import thread
 import wx
 from wx.lib.pubsub import Publisher as pub
 
@@ -9,17 +10,23 @@ class JukeJointModel(object):
   music_file_extensions = ['.mp3', '.flac', '.m4a', '.ogg']
   cover_filename = 'folder.jpg'
   
-  def __init__(self, display_num, music_path, player_path):
+  def __init__(self, display_num, music_path, config_path, player_path):
     self._display_num = display_num
     self._music_path = music_path
+    self._config_path = config_path
     self._player_path = player_path
+    
     self._display_folders = []
     self._filter = '02 popular'
     self._benchmark = 0
     self.search_mode_enabled = False
     self.user_filter = ''
 
-    self._folders = self._get_music_folders()
+    try:
+      self._folders = cPickle.load(open(config_path, 'rb'))[music_path]
+      thread.start_new_thread(self._get_music_folders, ())
+    except:
+      self._folders = self._get_music_folders()
     random.shuffle(self._folders)
 
   def play(self, display_idx):
@@ -54,7 +61,12 @@ class JukeJointModel(object):
     self._send_new_image_paths()
 
   def _get_music_folders(self):
-    return [path for path, dirs, files in os.walk(self._music_path)]
+    folders = [path for path, dirs, files in os.walk(self._music_path)]
+        
+    # Pickle folder list for next time.
+    out_file = open(self._config_path, 'wb')
+    cPickle.dump({self._music_path: folders}, out_file, protocol=2)
+    return folders
 
   def _get_folder(self, idx):
     return self._folders[idx % len(self._folders)]
@@ -123,8 +135,9 @@ class Cover(wx.StaticBitmap):
     wx.StaticBitmap.__init__(self, parent, -1, size=(img_size, img_size))
 
 class JukeJointController(object):
-  def __init__(self, music_path, player_path, img_size, span):
-    self.model = JukeJointModel(span * span, music_path, player_path)
+  def __init__(self, music_path, config_path, player_path, img_size, span):
+    self.model = JukeJointModel(span * span, music_path, config_path,
+                                player_path)
     self.view = JukeJointView(img_size, span)
     self.img_size = img_size
     pub.subscribe(self._on_folders_changed, "FOLDERS CHANGED")
@@ -188,6 +201,7 @@ if __name__ == '__main__':
   config = SafeConfigParser()
   config.read('jukejoint.ini')
   args = [config.get(os.name, 'music_path'),
+          os.path.expanduser(config.get(os.name, 'config_path')),
           config.get(os.name, 'player_path'),
           config.getint(os.name, 'img_size'),
           config.getint(os.name, 'span')]
