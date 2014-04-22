@@ -2,6 +2,7 @@ import cPickle
 import os
 import random
 import subprocess
+import sys
 import thread
 import wx
 from wx.lib.pubsub import Publisher as pub
@@ -198,8 +199,18 @@ class JukeJointController(object):
 
 if __name__ == '__main__':
   from ConfigParser import SafeConfigParser
+
+  # Parse the config file.
   config = SafeConfigParser()
-  config.read('jukejoint.ini')
+  script_dir = os.path.dirname(os.path.realpath(__file__))
+  config_path = os.path.join(script_dir, 'jukejoint.ini')
+  config.read(config_path)
+
+  # Make sure music directory exists.
+  music_path = config.get(os.name, 'music_path')
+  if not os.path.isdir(music_path):
+    sys.exit("No such directory: %s" % music_path)
+
   args = [config.get(os.name, 'music_path'),
           os.path.expanduser(config.get(os.name, 'config_path')),
           config.get(os.name, 'player_path'),
