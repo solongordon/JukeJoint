@@ -114,12 +114,14 @@ class Cover(wx.StaticBitmap):
 
 
 class JukeJoint(object):
-    def __init__(self, folder_iterator, player_path, img_size, span):
+    def __init__(self, folder_iterator, left_click_cmd, middle_click_cmd,
+                 img_size, span):
         self.folder_iterator = folder_iterator
         self.view = JukeJointView(img_size, span)
 
         self.img_size = img_size
-        self.player_path = player_path
+        self.left_click_cmd = left_click_cmd.split(' ')
+        self.middle_click_cmd = middle_click_cmd.split(' ')
         self.search_mode_enabled = False
         self.user_filter = ''
 
@@ -132,6 +134,7 @@ class JukeJoint(object):
         for cover in self.view.panel.covers:
             cover.Bind(wx.EVT_LEFT_UP, self._on_left_click)
             cover.Bind(wx.EVT_RIGHT_UP, self._on_right_click)
+            cover.Bind(wx.EVT_MIDDLE_UP, self._on_middle_click)
 
         self.view.Show()
         self.view.panel.SetFocus()
@@ -174,9 +177,13 @@ class JukeJoint(object):
                 self.folder_iterator.set_filter('04 singles')
 
     def _on_left_click(self, event):
-        cover_idx = self.view.panel.covers.index(event.GetEventObject())
-        folder = self.folder_iterator.current_folders()[cover_idx]
-        subprocess.Popen([self.player_path, folder])
+        folder = self._get_clicked_folder(event)
+        subprocess.Popen(self.left_click_cmd + [folder])
+        self.view.Destroy()
+
+    def _on_middle_click(self, event):
+        folder = self._get_clicked_folder(event)
+        subprocess.Popen(self.middle_click_cmd + [folder])
         self.view.Destroy()
 
     def _on_right_click(self, event):
@@ -187,6 +194,10 @@ class JukeJoint(object):
         image = wx.Image(image_path)
         image.Rescale(self.img_size, self.img_size, wx.IMAGE_QUALITY_HIGH)
         return wx.BitmapFromImage(image)
+
+    def _get_clicked_folder(self, event):
+        cover_idx = self.view.panel.covers.index(event.GetEventObject())
+        return self.folder_iterator.get_current_folders()[cover_idx]
 
 
 def get_music_folders(music_path, pickle_path):
@@ -208,7 +219,8 @@ if __name__ == '__main__':
     config.read(config_path)
     music_path = config.get(os.name, 'music_path')
     config_path = os.path.expanduser(config.get(os.name, 'config_path'))
-    player_path = config.get(os.name, 'player_path')
+    left_click_cmd = config.get(os.name, 'left_click_cmd')
+    middle_click_cmd = config.get(os.name, 'middle_click_cmd')
     img_size = config.getint(os.name, 'img_size')
     span = config.getint(os.name, 'span')
 
@@ -219,10 +231,11 @@ if __name__ == '__main__':
         folders = cPickle.load(open(config_path, 'rb'))[music_path]
         thread.start_new_thread(get_music_folders, (music_path, config_path))
     except:
-        folders = get_music_folders(music_path)
+        folders = get_music_folders(music_path, config_path)
     random.shuffle(folders)
     folder_iterator = FolderIterator(folders, span * span)
 
     app = wx.App(0)
-    JukeJoint(folder_iterator, player_path, img_size, span)
+    JukeJoint(folder_iterator, left_click_cmd, middle_click_cmd, img_size,
+              span)
     app.MainLoop()
