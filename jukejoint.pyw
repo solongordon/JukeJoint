@@ -161,9 +161,10 @@ class JukeJoint(object):
                 self.view.Destroy()
             elif keycode == wx.WXK_F3:
                 self.search_mode_enabled = True
-            elif keycode in (wx.WXK_SPACE, wx.WXK_DOWN, wx.WXK_RIGHT):
+            elif keycode in (wx.WXK_SPACE, wx.WXK_DOWN, wx.WXK_RIGHT,
+                             ord('J')):
                 self.folder_iterator.next()
-            elif keycode in (wx.WXK_UP, wx.WXK_LEFT):
+            elif keycode in (wx.WXK_UP, wx.WXK_LEFT, ord('K')):
                 self.folder_iterator.previous()
             elif keycode == ord('A'):
                 self.folder_iterator.set_filter('')
